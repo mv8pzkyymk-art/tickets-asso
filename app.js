@@ -201,8 +201,16 @@ async function pcLogin(email, password, tfaCode) {
   for (const host of HOSTS) {
     const label = host.includes('eapi') ? 'Europe' : 'USA';
     try {
-      const j = await pcPost(host, 'userinfo', { getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 });
+      const params = { getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 };
+      if (tfaCode) params.code = tfaCode;
+      const j = await pcPost(host, 'userinfo', params);
       if (j.result === 0 && j.auth) return { host, auth: j.auth, email: j.email || email };
+      if (j.result === 1022) {
+        // pCloud demande un code de sécurité (envoyé par e-mail, SMS ou appli d'authentification).
+        const e = new Error(tfaCode ? 'Code refusé par pCloud, vérifiez-le puis réessayez.'
+          : 'pCloud demande un code de sécurité : saisissez le code reçu puis touchez à nouveau « Se connecter ».');
+        e.tfa = true; throw e;
+      }
       if (j.result === 2297 && j.token) {
         // Double authentification activée sur le compte.
         if (!tfaCode) { const e = new Error('Code de double authentification requis : saisissez le code reçu puis touchez à nouveau « Se connecter ».'); e.tfa = true; throw e; }

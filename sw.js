@@ -1,6 +1,6 @@
 // Met en cache l'interface pour qu'elle s'ouvre même sans réseau.
 // Les appels à l'API pCloud ne passent jamais par le cache.
-const CACHE = 'tickets-v2';
+const CACHE = 'tickets-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png'];
 
 self.addEventListener('install', e => {

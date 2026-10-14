@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tickets Asso</title>
+  <meta name="theme-color" content="#1f4e79">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tickets Asso">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-asso="AECA">
+  <header>
+    <div class="switch" role="tablist" aria-label="Association">
+      <button role="tab" data-asso="AECA" aria-selected="true">AECA</button>
+      <button role="tab" data-asso="ACAPEL" aria-selected="false">ACAPEL</button>
+    </div>
+    <button id="btn-settings" class="icon" aria-label="Réglages">⚙︎</button>
+  </header>
+
+  <main id="view-main">
+    <p class="banner" id="banner-setup" hidden>
+      pCloud n'est pas encore connecté. <a href="#" id="link-setup">Ouvrir les réglages</a>
+    </p>
+
+    <label class="scan" id="scan-label">
+      <input type="file" id="file" accept="image/*" capture="environment" hidden>
+      <span class="scan-icon">📷</span>
+      <span>Scanner un ticket <b class="asso-name">AECA</b></span>
+    </label>
+
+    <form id="form" hidden>
+      <img id="preview" alt="Aperçu du ticket">
+      <button type="button" id="btn-retake" class="link">Reprendre la photo</button>
+
+      <label>Date du ticket
+        <input type="date" id="f-date" required>
+      </label>
+      <label>Commerce
+        <input type="text" id="f-shop" placeholder="ex. Carrefour" required autocomplete="off" list="shops">
+        <datalist id="shops"></datalist>
+      </label>
+      <label>Montant (€)
+        <input type="text" id="f-amount" inputmode="decimal" placeholder="ex. 23,45" required>
+      </label>
+      <label id="wrap-card" hidden>Carte utilisée
+        <select id="f-card"></select>
+      </label>
+
+      <div class="filename">
+        <small>Nom du fichier</small>
+        <code id="filename"></code>
+        <small>Dossier : <span id="folder"></span></small>
+      </div>
+
+      <button type="submit" class="primary" id="btn-send">Envoyer vers pCloud</button>
+    </form>
+
+    <section>
+      <h2>Derniers envois <span id="queue-info"></span></h2>
+      <ul id="history"></ul>
+    </section>
+  </main>
+
+  <main id="view-settings" hidden>
+    <h2>Connexion pCloud</h2>
+    <p class="muted" id="pc-status">Non connecté.</p>
+    <div id="pc-login">
+      <label>E-mail pCloud <input type="email" id="pc-user" autocomplete="username"></label>
+      <label>Mot de passe <input type="password" id="pc-pass" autocomplete="current-password"></label>
+      <button type="button" class="primary" id="btn-login">Se connecter</button>
+      <p class="muted">Le mot de passe n'est pas conservé : l'appli garde seulement un jeton d'accès sur ce téléphone.</p>
+    </div>
+    <button type="button" id="btn-logout" hidden>Déconnecter pCloud</button>
+
+    <h2>Dossiers de destination</h2>
+    <label>Dossier AECA <input type="text" id="s-folder-AECA"></label>
+    <label>Dossier ACAPEL <input type="text" id="s-folder-ACAPEL"></label>
+    <label class="check"><input type="checkbox" id="s-monthly"> Ranger dans un sous-dossier par mois (ex. 2026-10)</label>
+
+    <h2>Règle de nommage</h2>
+    <label>Modèle <input type="text" id="s-template"></label>
+    <p class="muted">Variables : {date} (AAAAMMJJ) {date_iso} (AAAA-MM-JJ) {annee} {mois} {jour} {asso} {commerce} {montant} {carte}</p>
+
+    <h2>Cartes bancaires (facultatif)</h2>
+    <label>Cartes AECA <input type="text" id="s-cards-AECA" placeholder="ex. CB1, CB2"></label>
+    <label>Cartes ACAPEL <input type="text" id="s-cards-ACAPEL" placeholder="ex. CB-Directeur"></label>
+    <p class="muted">Séparées par des virgules. Si renseignées, un choix de carte apparaît.</p>
+
+    <button type="button" class="primary" id="btn-save">Enregistrer</button>
+    <button type="button" id="btn-back">Retour</button>
+  </main>
+
+  <div id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

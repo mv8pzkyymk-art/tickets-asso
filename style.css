@@ -76,3 +76,6 @@ button:disabled { opacity: .5; }
   background: #222; color: #fff; padding: 14px 16px; border-radius: 12px; text-align: center; z-index: 5;
 }
 .error { color: #c62828; font-size: 14px; background: rgba(198,40,40,.08); border-radius: 8px; padding: 10px; word-break: break-word; }
+details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+#pc-key { display:block; width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; background: var(--bg); color: var(--text); font-size: 13px; }

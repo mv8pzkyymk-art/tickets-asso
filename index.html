@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tickets Asso">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body data-asso="AECA">
   <header>
@@ -68,12 +68,30 @@
     <h2>Connexion pCloud</h2>
     <p class="muted" id="pc-status">Non connecté.</p>
     <div id="pc-login">
-      <label>E-mail pCloud <input type="email" id="pc-user" autocomplete="username"></label>
-      <label>Mot de passe <input type="password" id="pc-pass" autocomplete="current-password"></label>
-      <label id="wrap-tfa" hidden>Code de sécurité pCloud <input type="text" id="pc-tfa" inputmode="numeric" autocomplete="one-time-code"></label>
-      <button type="button" class="primary" id="btn-login">Se connecter</button>
+      <button type="button" class="primary" id="btn-oauth">Se connecter avec pCloud</button>
+      <p class="muted">Ouvre la page de connexion officielle de pCloud (connexion Apple et codes de sécurité acceptés).</p>
+      <label>Identifiant d'appli pCloud (client_id) <input type="text" id="s-client" autocomplete="off" autocapitalize="off"></label>
       <p class="error" id="pc-error" hidden></p>
-      <p class="muted">Le mot de passe n'est pas conservé : l'appli garde seulement un jeton d'accès sur ce téléphone.</p>
+
+      <details>
+        <summary>J'ai une clé de connexion</summary>
+        <label>Clé de connexion <input type="text" id="pc-key-in" autocomplete="off" autocapitalize="off"></label>
+        <button type="button" id="btn-key">Utiliser cette clé</button>
+      </details>
+
+      <details>
+        <summary>Autre méthode : e-mail et mot de passe</summary>
+        <label>E-mail pCloud <input type="email" id="pc-user" autocomplete="username"></label>
+        <label>Mot de passe <input type="password" id="pc-pass" autocomplete="current-password"></label>
+        <label id="wrap-tfa" hidden>Code de sécurité pCloud <input type="text" id="pc-tfa" inputmode="numeric" autocomplete="one-time-code"></label>
+        <button type="button" id="btn-login">Se connecter</button>
+        <p class="muted">Le mot de passe n'est pas conservé : l'appli garde seulement un jeton d'accès sur ce téléphone.</p>
+      </details>
+    </div>
+    <div id="wrap-key-out" hidden>
+      <p class="muted">Connexion réussie dans Safari. Pour l'appli installée sur l'écran d'accueil, copiez cette clé puis collez-la dans ses réglages (« J'ai une clé de connexion »).</p>
+      <input type="text" id="pc-key" readonly>
+      <button type="button" id="btn-copy-key">Copier la clé</button>
     </div>
     <button type="button" id="btn-logout" hidden>Déconnecter pCloud</button>
 
@@ -93,10 +111,10 @@
 
     <button type="button" class="primary" id="btn-save">Enregistrer</button>
     <button type="button" id="btn-back">Retour</button>
-    <p class="muted" id="app-version" style="text-align:center">Version 4</p>
+    <p class="muted" id="app-version" style="text-align:center">Version 5</p>
   </main>
 
   <div id="toast" hidden></div>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

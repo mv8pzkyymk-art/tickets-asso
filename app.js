@@ -7,7 +7,8 @@ const DEFAULTS = {
   folders: { AECA: '/Carlo Acutis/GS Carlo Acutis - CA/Groupe Scolaire/GSCA/05. Comptabilité - Finances/03. Factures - Comptabilité/ticket reconnu IA/AECA', ACAPEL: '/Carlo Acutis/GS Carlo Acutis - CA/Groupe Scolaire/GSCA/05. Comptabilité - Finances/03. Factures - Comptabilité/ticket reconnu IA/ACAPEL' },
   monthly: false,
   cards: { AECA: [], ACAPEL: [] },
-  pcloud: null, // { host, auth, email }
+  pcloud: null, // { host, auth | token, email }
+  clientId: '', // identifiant de l'appli déclarée chez pCloud (connexion « Se connecter avec pCloud »)
 };
 const ASSOS = ['AECA', 'ACAPEL'];
 
@@ -139,6 +140,7 @@ $('form').addEventListener('submit', async e => {
   if (!S.pcloud) { toast('Ticket gardé en attente : connectez pCloud dans les réglages.'); return; }
   toast('Envoi en cours…');
   await processQueue();
+pcOAuthReturn();
 });
 
 let processing = false;
@@ -228,30 +230,64 @@ async function pcLogin(email, password, tfaCode) {
   throw new Error(errors.join(' | '));
 }
 
+// Jeton à joindre aux appels : connexion pCloud officielle (access_token) ou e-mail/mot de passe (auth).
+function pcCred() { return S.pcloud.token ? { access_token: S.pcloud.token } : { auth: S.pcloud.auth }; }
+
+// ---------- Connexion officielle pCloud (OAuth) ----------
+// La page de connexion de pCloud gère elle-même la connexion Apple et les codes de sécurité.
+function redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
+function pcOAuthStart() {
+  const id = (S.clientId || '').trim();
+  if (!id) { showLoginError('Renseignez d\'abord l\'identifiant d\'appli pCloud ci-dessous.'); return; }
+  location.href = 'https://my.pcloud.com/oauth2/authorize?' + new URLSearchParams({ client_id: id, response_type: 'token', redirect_uri: redirectUri() });
+}
+async function pcOAuthReturn() {
+  if (!location.hash.includes('access_token=') && !location.hash.includes('error=')) return false;
+  const h = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, '', location.pathname);
+  if (h.get('error')) { showSettings(true); showLoginError('pCloud a refusé la connexion : ' + h.get('error')); return true; }
+  await useToken('https://' + (h.get('hostname') || 'api.pcloud.com'), h.get('access_token'));
+  return true;
+}
+async function useToken(host, token) {
+  let email = 'compte pCloud';
+  try { const j = await pcCall(host, 'userinfo', { access_token: token }); email = j.email || email; } catch (e) { console.warn(e); }
+  S.pcloud = { host, token, email }; saveSettings();
+  showSettings(true); toast('pCloud connecté ✓');
+  // Dans Safari (hors appli installée), on affiche une clé à recopier dans l'appli installée.
+  if (!matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
+    $('pc-key').value = btoa(JSON.stringify({ h: host, t: token }));
+    $('wrap-key-out').hidden = false;
+  }
+  processQueue();
+pcOAuthReturn();
+}
+function showLoginError(msg) { $('pc-error').textContent = msg; $('pc-error').hidden = false; }
+
 const folderCache = {};
 async function pcEnsureFolder(path) {
   if (folderCache[path]) return folderCache[path];
-  const { host, auth } = S.pcloud;
+  const { host } = S.pcloud; const cred = pcCred();
   let folderid = 0;
   // On cherche d'abord le dossier existant en ignorant la forme des accents
   // (un Mac peut les écrire différemment), pour ne jamais créer de doublon.
   const norm = n => n.normalize('NFC');
   for (const part of path.split('/').filter(Boolean)) {
-    const list = await pcCall(host, 'listfolder', { auth, folderid, nofiles: 1 });
+    const list = await pcCall(host, 'listfolder', { ...cred, folderid, nofiles: 1 });
     const found = (list.metadata.contents || []).find(c => c.isfolder && norm(c.name) === norm(part));
     if (found) { folderid = found.folderid; continue; }
-    const r = await pcCall(host, 'createfolderifnotexists', { auth, folderid, name: part });
+    const r = await pcCall(host, 'createfolderifnotexists', { ...cred, folderid, name: part });
     folderid = r.metadata.folderid;
   }
   return (folderCache[path] = folderid);
 }
 
 async function pcUpload(folder, name, blob) {
-  const { host, auth } = S.pcloud;
+  const { host } = S.pcloud; const cred = pcCred();
   const folderid = await pcEnsureFolder(folder);
   const fd = new FormData();
   fd.append('file', blob, name);
-  const r = await pcCall(host, 'uploadfile', { auth, folderid, filename: name, renameifexists: 1, nopartial: 1 }, fd);
+  const r = await pcCall(host, 'uploadfile', { ...cred, folderid, filename: name, renameifexists: 1, nopartial: 1 }, fd);
   return (r.metadata && r.metadata[0] && r.metadata[0].name) || name;
 }
 
@@ -287,6 +323,7 @@ function showSettings(show) {
   if (show) {
     ASSOS.forEach(a => { $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
     $('s-template').value = S.template;
+    $('s-client').value = S.clientId || '';
     $('s-monthly').checked = S.monthly;
     renderPcStatus();
   }
@@ -319,6 +356,7 @@ $('btn-login').addEventListener('click', async () => {
     saveSettings(); $('pc-pass').value = ''; $('pc-tfa').value = ''; $('wrap-tfa').hidden = true;
     renderPcStatus(); toast('pCloud connecté ✓');
     processQueue();
+pcOAuthReturn();
   } catch (e) {
     if (e.tfa) $('wrap-tfa').hidden = false;
     $('pc-error').textContent = 'Échec de connexion. ' + e.message;
@@ -327,6 +365,12 @@ $('btn-login').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = 'Se connecter';
 });
 $('btn-logout').addEventListener('click', () => { S.pcloud = null; saveSettings(); renderPcStatus(); });
+$('btn-oauth').addEventListener('click', () => { S.clientId = $('s-client').value.trim(); saveSettings(); pcOAuthStart(); });
+$('btn-key').addEventListener('click', async () => {
+  try { const k = JSON.parse(atob($('pc-key-in').value.trim())); await useToken(k.h, k.t); $('pc-key-in').value = ''; }
+  catch { showLoginError('Clé de connexion invalide : recopiez-la en entier.'); }
+});
+$('btn-copy-key').addEventListener('click', () => { navigator.clipboard.writeText($('pc-key').value).then(() => toast('Clé copiée')); });
 
 // ---------- Divers ----------
 let toastTimer;
@@ -348,3 +392,4 @@ fillShops();
 renderPcStatus();
 renderHistory();
 processQueue();
+pcOAuthReturn();

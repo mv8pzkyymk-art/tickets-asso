@@ -413,6 +413,20 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
 }
 
+// Lien d'installation : https://…/tickets-asso/#setup=AECA:code,ACAPEL:code
+// Les liens de dépôt restent dans l'adresse donnée aux utilisateurs, jamais dans le code public.
+(function applySetup() {
+  const m = location.hash.match(/setup=([^&]+)/);
+  if (!m) return;
+  decodeURIComponent(m[1]).split(',').forEach(pair => {
+    const [asso, code] = pair.split(':');
+    if (ASSOS.includes(asso) && code) S.links[asso] = linkCode(code);
+  });
+  saveSettings();
+  history.replaceState(null, '', location.pathname);
+  setTimeout(() => toast('Appli configurée ✓ ' + ASSOS.filter(a => S.links[a]).join(' et ')), 300);
+})();
+
 setAsso(S.asso);
 fillShops();
 renderPcStatus();

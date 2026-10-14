@@ -183,18 +183,41 @@ async function pcCall(host, method, params = {}, body) {
   return json;
 }
 
-async function pcLogin(email, password) {
-  let lastErr;
-  for (const host of HOSTS) {
-    try {
-      const body = new URLSearchParams({ getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 });
-      const r = await fetch(`${host}/userinfo`, { method: 'POST', body });
-      const j = await r.json();
-      if (j.result === 0 && j.auth) return { host, auth: j.auth, email: j.email || email };
-      lastErr = new Error(j.error || 'Identifiants refusés');
-    } catch (e) { lastErr = e; }
+// Connexion : on essaie les serveurs Europe puis USA, et on garde le détail de chaque
+// échec pour l'afficher (identifiants refusés, double authentification, réseau bloqué…).
+async function pcPost(host, method, params) {
+  try {
+    const r = await fetch(`${host}/${method}`, { method: 'POST', body: new URLSearchParams(params) });
+    return await r.json();
+  } catch (e) {
+    // Repli en GET si le POST est bloqué par le navigateur.
+    const r = await fetch(`${host}/${method}?` + new URLSearchParams(params));
+    return await r.json();
   }
-  throw lastErr;
+}
+
+async function pcLogin(email, password, tfaCode) {
+  const errors = [];
+  for (const host of HOSTS) {
+    const label = host.includes('eapi') ? 'Europe' : 'USA';
+    try {
+      const j = await pcPost(host, 'userinfo', { getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 });
+      if (j.result === 0 && j.auth) return { host, auth: j.auth, email: j.email || email };
+      if (j.result === 2297 && j.token) {
+        // Double authentification activée sur le compte.
+        if (!tfaCode) { const e = new Error('Code de double authentification requis : saisissez le code reçu puis touchez à nouveau « Se connecter ».'); e.tfa = true; throw e; }
+        const t = await pcPost(host, 'tfa_login', { token: j.token, code: tfaCode, trustdevice: 1 });
+        if (t.result === 0 && t.auth) return { host, auth: t.auth, email };
+        errors.push(`${label} : code refusé (${t.error || ''} ${t.result})`);
+        continue;
+      }
+      errors.push(`${label} : ${j.error || 'refus'} (code ${j.result})`);
+    } catch (e) {
+      if (e.tfa) throw e;
+      errors.push(`${label} : connexion impossible (${e.message})`);
+    }
+  }
+  throw new Error(errors.join(' | '));
 }
 
 const folderCache = {};
@@ -282,12 +305,17 @@ $('btn-save').addEventListener('click', () => {
 });
 $('btn-login').addEventListener('click', async () => {
   const btn = $('btn-login'); btn.disabled = true; btn.textContent = 'Connexion…';
+  $('pc-error').hidden = true;
   try {
-    S.pcloud = await pcLogin($('pc-user').value.trim(), $('pc-pass').value);
-    saveSettings(); $('pc-pass').value = '';
+    S.pcloud = await pcLogin($('pc-user').value.trim(), $('pc-pass').value, $('pc-tfa').value.trim());
+    saveSettings(); $('pc-pass').value = ''; $('pc-tfa').value = ''; $('wrap-tfa').hidden = true;
     renderPcStatus(); toast('pCloud connecté ✓');
     processQueue();
-  } catch (e) { toast('Échec de connexion : ' + e.message); }
+  } catch (e) {
+    if (e.tfa) $('wrap-tfa').hidden = false;
+    $('pc-error').textContent = 'Échec de connexion. ' + e.message;
+    $('pc-error').hidden = false;
+  }
   btn.disabled = false; btn.textContent = 'Se connecter';
 });
 $('btn-logout').addEventListener('click', () => { S.pcloud = null; saveSettings(); renderPcStatus(); });

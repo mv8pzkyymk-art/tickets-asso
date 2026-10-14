@@ -336,7 +336,12 @@ function toast(msg) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) {
+  // Vérifie à chaque ouverture s'il existe une nouvelle version, et recharge une fois si c'est le cas.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update());
+  let reloaded = !navigator.serviceWorker.controller; // pas de rechargement à la toute première ouverture
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
 
 setAsso(S.asso);
 fillShops();

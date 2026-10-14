@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tickets Asso">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body data-asso="AECA">
   <header>
@@ -95,7 +95,13 @@
     </div>
     <button type="button" id="btn-logout" hidden>Déconnecter pCloud</button>
 
+    <h2>Liens de dépôt pCloud (recommandé)</h2>
+    <p class="muted">Collez le lien de dépôt de chaque dossier (pCloud, clic droit sur le dossier, « Dépôt de fichiers »). Aucune connexion au compte n'est alors nécessaire, et le téléphone peut seulement déposer.</p>
+    <label>Lien de dépôt AECA <input type="text" id="s-link-AECA" autocomplete="off" autocapitalize="off" placeholder="https://…pcloud.link/…code=…"></label>
+    <label>Lien de dépôt ACAPEL <input type="text" id="s-link-ACAPEL" autocomplete="off" autocapitalize="off" placeholder="https://…pcloud.link/…code=…"></label>
+
     <h2>Dossiers de destination</h2>
+    <p class="muted">Utilisés seulement avec la connexion au compte pCloud.</p>
     <label>Dossier AECA <input type="text" id="s-folder-AECA"></label>
     <label>Dossier ACAPEL <input type="text" id="s-folder-ACAPEL"></label>
     <label class="check"><input type="checkbox" id="s-monthly"> Ranger dans un sous-dossier par mois (ex. 2026-10)</label>
@@ -111,10 +117,10 @@
 
     <button type="button" class="primary" id="btn-save">Enregistrer</button>
     <button type="button" id="btn-back">Retour</button>
-    <p class="muted" id="app-version" style="text-align:center">Version 5</p>
+    <p class="muted" id="app-version" style="text-align:center">Version 6</p>
   </main>
 
   <div id="toast" hidden></div>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

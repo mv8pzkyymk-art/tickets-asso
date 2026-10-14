@@ -8,6 +8,7 @@ const DEFAULTS = {
   monthly: false,
   cards: { AECA: [], ACAPEL: [] },
   pcloud: null, // { host, auth | token, email }
+  links: { AECA: '', ACAPEL: '' }, // liens de dépôt pCloud (code), un par association
   clientId: '', // identifiant de l'appli déclarée chez pCloud (connexion « Se connecter avec pCloud »)
 };
 const ASSOS = ['AECA', 'ACAPEL'];
@@ -18,6 +19,8 @@ function loadSettings() {
 }
 function saveSettings() { localStorage.setItem('settings', JSON.stringify(S)); }
 let S = loadSettings();
+if (!S.links) S.links = { AECA: '', ACAPEL: '' };
+const canSend = asso => !!(S.links[asso] || S.pcloud);
 
 const $ = id => document.getElementById(id);
 let currentBlob = null;
@@ -137,21 +140,23 @@ $('form').addEventListener('submit', async e => {
   addHistory({ id: item.id, asso: item.asso, name: item.name, folder: item.folder, status: 'wait' });
   currentBlob = null;
   $('form').hidden = true; $('scan-label').hidden = false;
-  if (!S.pcloud) { toast('Ticket gardé en attente : connectez pCloud dans les réglages.'); return; }
+  if (!canSend(item.asso)) { toast('Ticket gardé en attente : connectez pCloud dans les réglages.'); return; }
   toast('Envoi en cours…');
   await processQueue();
-pcOAuthReturn();
 });
 
 let processing = false;
 async function processQueue() {
-  if (processing || !S.pcloud) return;
+  if (processing) return;
   processing = true;
   let sent = 0, failed = 0;
   try {
     for (const item of await queueAll()) {
+      if (!canSend(item.asso)) continue;
       try {
-        const finalName = await pcUpload(item.folder, item.name, item.blob);
+        const finalName = S.links[item.asso]
+          ? await pcUploadToLink(S.links[item.asso], item.name, item.blob)
+          : await pcUpload(item.folder, item.name, item.blob);
         await queueDel(item.id);
         setHistory(item.id, { status: 'ok', name: finalName });
         sent++;
@@ -260,7 +265,6 @@ async function useToken(host, token) {
     $('wrap-key-out').hidden = false;
   }
   processQueue();
-pcOAuthReturn();
 }
 function showLoginError(msg) { $('pc-error').textContent = msg; $('pc-error').hidden = false; }
 
@@ -289,6 +293,26 @@ async function pcUpload(folder, name, blob) {
   fd.append('file', blob, name);
   const r = await pcCall(host, 'uploadfile', { ...cred, folderid, filename: name, renameifexists: 1, nopartial: 1 }, fd);
   return (r.metadata && r.metadata[0] && r.metadata[0].name) || name;
+}
+
+// Dépôt via un lien de dépôt pCloud (« Dépôt de fichiers ») : aucune connexion au compte,
+// le téléphone peut seulement déposer dans le dossier choisi, sans rien voir ni supprimer.
+async function pcUploadToLink(code, name, blob) {
+  let last;
+  for (const host of HOSTS) {
+    const fd = new FormData();
+    fd.append('file', blob, name);
+    const r = await fetch(`${host}/uploadtolink?` + new URLSearchParams({ code, names: 'Appli Tickets' }), { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j.result === 0) return name;
+    last = new Error(j.error || 'Erreur pCloud ' + j.result);
+  }
+  throw last;
+}
+function linkCode(s) {
+  s = (s || '').trim();
+  const m = s.match(/[?&]code=([A-Za-z0-9]+)/);
+  return m ? m[1] : s.replace(/[^A-Za-z0-9]/g, '');
 }
 
 // ---------- Historique ----------
@@ -321,7 +345,7 @@ function fillShops() {
 function showSettings(show) {
   $('view-main').hidden = show; $('view-settings').hidden = !show;
   if (show) {
-    ASSOS.forEach(a => { $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
+    ASSOS.forEach(a => { $('s-link-' + a).value = S.links[a] || ''; $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
     $('s-template').value = S.template;
     $('s-client').value = S.clientId || '';
     $('s-monthly').checked = S.monthly;
@@ -331,9 +355,11 @@ function showSettings(show) {
 }
 function renderPcStatus() {
   const on = !!S.pcloud;
-  $('pc-status').textContent = on ? `Connecté : ${S.pcloud.email} (${S.pcloud.host.includes('eapi') ? 'serveur Europe' : 'serveur USA'})` : 'Non connecté.';
+  const links = ASSOS.filter(a => S.links[a]);
+  $('pc-status').textContent = on ? `Connecté : ${S.pcloud.email} (${S.pcloud.host.includes('eapi') ? 'serveur Europe' : 'serveur USA'})`
+    : links.length ? `Envoi par lien de dépôt pour : ${links.join(', ')}` : 'Non connecté.';
   $('pc-login').hidden = on; $('btn-logout').hidden = !on;
-  $('banner-setup').hidden = on;
+  $('banner-setup').hidden = on || links.length === ASSOS.length;
 }
 $('btn-settings').addEventListener('click', () => showSettings($('view-settings').hidden));
 $('link-setup').addEventListener('click', e => { e.preventDefault(); showSettings(true); });
@@ -342,6 +368,7 @@ $('btn-save').addEventListener('click', () => {
   ASSOS.forEach(a => {
     S.folders[a] = '/' + $('s-folder-' + a).value.trim().replace(/^\/+|\/+$/g, '');
     S.cards[a] = $('s-cards-' + a).value.split(',').map(s => s.trim()).filter(Boolean);
+    S.links[a] = linkCode($('s-link-' + a).value);
   });
   S.template = $('s-template').value.trim() || DEFAULTS.template;
   S.monthly = $('s-monthly').checked;
@@ -356,7 +383,6 @@ $('btn-login').addEventListener('click', async () => {
     saveSettings(); $('pc-pass').value = ''; $('pc-tfa').value = ''; $('wrap-tfa').hidden = true;
     renderPcStatus(); toast('pCloud connecté ✓');
     processQueue();
-pcOAuthReturn();
   } catch (e) {
     if (e.tfa) $('wrap-tfa').hidden = false;
     $('pc-error').textContent = 'Échec de connexion. ' + e.message;

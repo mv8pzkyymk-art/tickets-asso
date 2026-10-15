@@ -95,19 +95,19 @@ $('file').addEventListener('change', async e => {
     $('f-shop').value = ''; $('f-amount').value = '';
     $('form').hidden = false; $('scan-label').hidden = true;
     updateFilename();
-    autoRead(currentBlob);
+    autoRead(currentBlob, file); // lecture sur la photo d'origine, plus détaillée
   } catch (err) { toast('Impossible de lire la photo : ' + err.message); }
   e.target.value = '';
 });
 $('btn-retake').addEventListener('click', () => $('file').click());
 
 // Lecture automatique : préremplit fournisseur, date et montant (champs modifiables ensuite).
-async function autoRead(blob) {
+async function autoRead(blob, original) {
   const st = $('ocr-status');
   st.hidden = false; st.textContent = 'Lecture du ticket…';
   $('ocr-raw').hidden = true; $('ocr-raw').open = false;
   try {
-    const r = await readReceipt(blob, p => { st.textContent = `Lecture du ticket… ${Math.round(p * 100)} %`; });
+    const r = await readReceipt(original || blob, p => { st.textContent = `Lecture du ticket… ${Math.round(p * 100)} %`; });
     if (blob !== currentBlob) return; // une autre photo a été prise entre-temps
     $('ocr-text').textContent = r.text || ''; $('ocr-raw').hidden = !r.text;
     const found = [];

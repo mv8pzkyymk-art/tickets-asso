@@ -24,12 +24,12 @@ function findAmount(lines) {
   // 2 décimales (12,50) ou 3 sur certaines factures (198,350).
   const num = /(\d{1,5}(?:[ .]\d{3})*\s?[.,]\s?\d{2,3})(?!\d)/g;
   const rules = [
-    [/t[o0]t[a4][l1i]\s*t\.?t\.?c|net\s*a\s*payer|a\s*payer|t[o0]t[a4][l1i]\s*a\s*regler|somme\s*due/, 5],
+    [/t[o0]t[a4][l1i]\s*t\.?t\.?c|t[o0]t[a4][l1i]\s*vers|net\s*a\s*payer|a\s*payer|t[o0]t[a4][l1i]\s*a\s*regler|somme\s*due/, 5],
     [/t[o0]t[a4][l1i]|\bsous[- ]?total\b/, 4],
     [/montant|\bcb\b|\bc\.b\b|carte|visa|mastercard|\bemv\b|paiement|regle|debit|\beur\b|€/, 3],
   ];
   const bad = /tva|\bht\b|hors\s*taxe|rendu|economi|remise|fidelite|avoir|\bpoints?\b|cagnott|\btaux\b/;
-  let best = null;
+  let best = null; const cands = [];
   lines.forEach((line, i) => {
     const l = norm(line);
     if (bad.test(l)) return;
@@ -39,10 +39,14 @@ function findAmount(lines) {
       let found = [...line.matchAll(num)].map(m => parseAmount(m[1]));
       if (!found.length && lines[i + 1]) found = [...lines[i + 1].matchAll(num)].map(m => parseAmount(m[1]));
       const v = found.filter(x => x !== null && x > 0).pop();
+      if (v != null) cands.push({ v, score });
       if (v != null && (!best || score > best.score || (score === best.score && v > best.v))) best = { v, score };
       break;
     }
   });
+  // Un montant retrouvé sur plusieurs lignes (total, versé, CB…) est plus sûr qu'une seule lecture.
+  const seen = cands.filter(c => cands.filter(d => d.v === c.v).length > 1).sort((a, b) => b.score - a.score);
+  if (seen.length) return seen[0].v;
   if (best) return best.v;
   // À défaut : le plus grand montant du ticket (souvent le total).
   const all = lines.flatMap(l => [...l.matchAll(num)].map(m => parseAmount(m[1]))).filter(x => x && x < 100000);
@@ -94,7 +98,7 @@ function parseReceipt(text) {
 // (les tickets thermiques sont souvent pâles, photographiés avec une ombre).
 async function prepare(blob) {
   const img = await createImageBitmap(blob);
-  const scale = Math.min(2, 1800 / Math.max(img.width, img.height));
+  const scale = Math.min(window.OCR_UP || 1.25, 2600 / Math.max(img.width, img.height)); // assez de détail pour une facture A4 entière
   const c = document.createElement('canvas');
   c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
   const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, c.width, c.height);
@@ -127,7 +131,14 @@ async function readReceipt(blob, onProgress) {
     });
   }
   const { data } = await ocrWorker.recognize(await prepare(blob));
-  return { ...parseReceipt(data.text), text: data.text };
+  const r = parseReceipt(data.text);
+  // Fournisseur deviné (pas une enseigne connue) sur une ligne mal lue : on laisse vide plutôt qu'un nom absurde.
+  if (r.shop && !ENSEIGNES.includes(r.shop) && r.shop !== 'Leclerc') {
+    const words = norm(r.shop).split(/\s+/);
+    const line = (data.lines || []).find(l => words.every(w => norm(l.text).includes(w)));
+    if (line && line.confidence < 35) r.shop = null;
+  }
+  return { ...r, text: data.text };
 }
 
 if (typeof module !== 'undefined') module.exports = { parseReceipt };

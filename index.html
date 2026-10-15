@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tickets Asso">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body data-asso="AECA">
   <header>
@@ -35,6 +35,7 @@
       <img id="preview" alt="Aperçu du ticket">
       <button type="button" id="btn-retake" class="link">Reprendre la photo</button>
       <p class="muted" id="ocr-status" hidden></p>
+      <details id="ocr-raw" hidden><summary>Voir le texte lu</summary><pre id="ocr-text"></pre></details>
 
       <label>Date du ticket
         <input type="date" id="f-date" required>
@@ -129,12 +130,13 @@
 
     <button type="button" class="primary" id="btn-save">Enregistrer</button>
     <button type="button" id="btn-back">Retour</button>
-    <p class="muted" id="app-version" style="text-align:center">Version 12</p>
+    <p class="muted" id="app-version" style="text-align:center">Version 13</p>
   </main>
 
   <div id="toast" hidden></div>
-  <script src="dropbox.js?v=12"></script>
-  <script src="ocr.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="dropbox.js?v=13"></script>
+  <script src="pdf.js?v=13"></script>
+  <script src="ocr.js?v=13"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

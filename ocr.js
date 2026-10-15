@@ -21,13 +21,13 @@ function parseAmount(s) {
 
 // Montant : on privilégie les lignes « TOTAL TTC », « À PAYER », « MONTANT », « CB »… en écartant TVA et HT.
 function findAmount(lines) {
-  const num = /(\d{1,5}(?:[ .]\d{3})*[.,]\d{2})(?!\d)/g;
+  const num = /(\d{1,5}(?:[ .]\d{3})*\s?[.,]\s?\d{2})(?!\d)/g;
   const rules = [
-    [/total\s*t\.?t\.?c|net\s*a\s*payer|a\s*payer|total\s*a\s*regler/, 5],
-    [/\btotal\b/, 4],
-    [/montant|\bcb\b|carte|visa|mastercard|paiement|regle/, 3],
+    [/t[o0]t[a4][l1i]\s*t\.?t\.?c|net\s*a\s*payer|a\s*payer|t[o0]t[a4][l1i]\s*a\s*regler|somme\s*due/, 5],
+    [/t[o0]t[a4][l1i]|\bsous[- ]?total\b/, 4],
+    [/montant|\bcb\b|\bc\.b\b|carte|visa|mastercard|\bemv\b|paiement|regle|debit|\beur\b|€/, 3],
   ];
-  const bad = /tva|\bht\b|hors\s*taxe|rendu|economie|remise|fidelite|avoir|points?/;
+  const bad = /tva|\bht\b|hors\s*taxe|rendu|economi|remise|fidelite|avoir|\bpoints?\b|cagnott|\btaux\b/;
   let best = null;
   lines.forEach((line, i) => {
     const l = norm(line);
@@ -76,7 +76,7 @@ function findShop(lines) {
   for (const line of lines.slice(0, 6)) {
     const t = line.replace(/[^A-Za-zÀ-ÿ'& -]/g, ' ').replace(/\s+/g, ' ').trim();
     const letters = t.replace(/[^A-Za-zÀ-ÿ]/g, '');
-    if (letters.length >= 3 && !/ticket|bienvenue|facture|caisse|magasin|tel|siret|www/i.test(t)) {
+    if (letters.length >= 4 && letters.length / t.length > 0.6 && !/ticket|bienvenue|facture|caisse|magasin|\btel\b|siret|www|\brue\b|\bav\b|avenue|boulevard/i.test(t)) {
       return t.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, c => c.toUpperCase()).slice(0, 30);
     }
   }
@@ -86,6 +86,27 @@ function findShop(lines) {
 function parseReceipt(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   return { shop: findShop(lines), date: findDate(text), amount: findAmount(lines) };
+}
+
+// Prépare la photo pour la lecture : niveaux de gris et contraste renforcé
+// (les tickets thermiques sont souvent pâles, photographiés avec une ombre).
+async function prepare(blob) {
+  const img = await createImageBitmap(blob);
+  const scale = Math.min(2, 1800 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+  const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, c.width, c.height);
+  const im = ctx.getImageData(0, 0, c.width, c.height), d = im.data;
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = g; hist[g]++; }
+  // Étire l'histogramme entre les 2 % les plus sombres et les 2 % les plus clairs.
+  const n = d.length / 4; let lo = 0, hi = 255, acc = 0;
+  while (lo < 255 && (acc += hist[lo]) < n * 0.02) lo++;
+  acc = 0; while (hi > 0 && (acc += hist[hi]) < n * 0.02) hi--;
+  const k = 255 / Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * k)); d[i] = d[i + 1] = d[i + 2] = v; }
+  ctx.putImageData(im, 0, 0);
+  return c;
 }
 
 let ocrWorker = null;
@@ -103,7 +124,7 @@ async function readReceipt(blob, onProgress) {
       logger: m => onProgress && m.status === 'recognizing text' && onProgress(m.progress),
     });
   }
-  const { data } = await ocrWorker.recognize(blob);
+  const { data } = await ocrWorker.recognize(await prepare(blob));
   return { ...parseReceipt(data.text), text: data.text };
 }
 

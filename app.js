@@ -66,7 +66,7 @@ function buildName() {
   };
   let name = S.template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   name = name.replace(/([-_])\1+/g, '$1').replace(/^[-_]|[-_]$/g, '');
-  return name + '.jpg';
+  return name + '.pdf';
 }
 function buildFolder() {
   let f = S.folders[S.asso] || '/';
@@ -105,9 +105,11 @@ $('btn-retake').addEventListener('click', () => $('file').click());
 async function autoRead(blob) {
   const st = $('ocr-status');
   st.hidden = false; st.textContent = 'Lecture du ticket…';
+  $('ocr-raw').hidden = true; $('ocr-raw').open = false;
   try {
     const r = await readReceipt(blob, p => { st.textContent = `Lecture du ticket… ${Math.round(p * 100)} %`; });
     if (blob !== currentBlob) return; // une autre photo a été prise entre-temps
+    $('ocr-text').textContent = r.text || ''; $('ocr-raw').hidden = !r.text;
     const found = [];
     if (r.shop && !$('f-shop').value) { $('f-shop').value = r.shop; found.push('fournisseur'); }
     if (r.date) { $('f-date').value = r.date; found.push('date'); }
@@ -156,7 +158,7 @@ const queueAll = () => queueOp('readonly', s => s.getAll());
 $('btn-share').addEventListener('click', async () => {
   if (!currentBlob) return;
   const name = buildName();
-  const file = new File([currentBlob], name, { type: 'image/jpeg' });
+  const file = new File([await jpegToPdf(currentBlob)], name, { type: 'application/pdf' });
   if (!(navigator.canShare && navigator.canShare({ files: [file] }))) {
     // Navigateur sans partage de fichiers : on télécharge le fichier nommé.
     const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
@@ -175,7 +177,7 @@ $('form').addEventListener('submit', async e => {
   e.preventDefault();
   if (!currentBlob) return;
   const item = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), asso: S.asso,
-    name: buildName(), folder: buildFolder(), blob: currentBlob, at: new Date().toISOString() };
+    name: buildName(), folder: buildFolder(), blob: await jpegToPdf(currentBlob), at: new Date().toISOString() };
   remember($('f-shop').value.trim());
   await queueAdd(item);
   addHistory({ id: item.id, asso: item.asso, name: item.name, folder: item.folder, status: 'wait' });
@@ -389,7 +391,7 @@ $('history').addEventListener('click', async e => {
   const id = btn.closest('li').dataset.id;
   const item = (await queueAll()).find(q => q.id === id);
   if (btn.dataset.act === 'share' && item) {
-    const file = new File([item.blob], item.name, { type: 'image/jpeg' });
+    const file = new File([item.blob], item.name, { type: item.blob.type || 'image/jpeg' });
     try { await navigator.share({ files: [file] }); } catch (err) { if (err.name !== 'AbortError') toast('Partage impossible'); return; }
     await queueDel(id); toast('Ticket partagé ✓'); renderHistory(); return;
   }

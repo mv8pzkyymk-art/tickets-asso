@@ -81,3 +81,4 @@ summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 #pc-key { display:block; width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; background: var(--bg); color: var(--text); font-size: 13px; }
 button.mini { width: auto; margin: 0; padding: 4px 10px; font-size: 15px; border-radius: 8px; }
 #ocr-status { margin: 4px 0 0; }
+#ocr-text{white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto;background:#f4f6f8;padding:8px;border-radius:6px}

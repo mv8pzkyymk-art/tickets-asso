@@ -16,12 +16,13 @@ const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function parseAmount(s) {
   const n = parseFloat(s.replace(/\s/g, '').replace(',', '.'));
-  return isNaN(n) ? null : n;
+  return isNaN(n) ? null : Math.round(n * 100) / 100;
 }
 
 // Montant : on privilégie les lignes « TOTAL TTC », « À PAYER », « MONTANT », « CB »… en écartant TVA et HT.
 function findAmount(lines) {
-  const num = /(\d{1,5}(?:[ .]\d{3})*\s?[.,]\s?\d{2})(?!\d)/g;
+  // 2 décimales (12,50) ou 3 sur certaines factures (198,350).
+  const num = /(\d{1,5}(?:[ .]\d{3})*\s?[.,]\s?\d{2,3})(?!\d)/g;
   const rules = [
     [/t[o0]t[a4][l1i]\s*t\.?t\.?c|net\s*a\s*payer|a\s*payer|t[o0]t[a4][l1i]\s*a\s*regler|somme\s*due/, 5],
     [/t[o0]t[a4][l1i]|\bsous[- ]?total\b/, 4],
@@ -77,7 +78,8 @@ function findShop(lines) {
     const t = line.replace(/[^A-Za-zÀ-ÿ'& -]/g, ' ').replace(/\s+/g, ' ').trim();
     const letters = t.replace(/[^A-Za-zÀ-ÿ]/g, '');
     if (letters.length >= 4 && letters.length / t.length > 0.6 && !/ticket|bienvenue|facture|caisse|magasin|\btel\b|siret|www|\brue\b|\bav\b|avenue|boulevard/i.test(t)) {
-      return t.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, c => c.toUpperCase()).slice(0, 30);
+      const t2 = t.replace(/^(?:(?:\S{1,2}|mag|magasin|ste|sarl|sas)\s+)+/i, '') || t; // « A.S.F Mag Copifac » → « Copifac »
+      return t2.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, c => c.toUpperCase()).slice(0, 30);
     }
   }
   return null;

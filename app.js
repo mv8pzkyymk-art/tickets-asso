@@ -18,9 +18,11 @@ function loadSettings() {
   catch { return { ...DEFAULTS }; }
 }
 function saveSettings() { localStorage.setItem('settings', JSON.stringify(S)); }
+// Clé de l'appli Dropbox des associations (publique, ce n'est pas un secret).
+const DBX_DEFAULT_KEY = '';
 let S = loadSettings();
 if (!S.links) S.links = { AECA: '', ACAPEL: '' };
-const canSend = asso => !!(S.links[asso] || S.pcloud);
+const canSend = asso => !!(S.links[asso] || S.pcloud || S.dropbox);
 
 const $ = id => document.getElementById(id);
 let currentBlob = null;
@@ -193,16 +195,16 @@ async function processQueue() {
     for (const item of await queueAll()) {
       if (!canSend(item.asso)) continue;
       try {
-        const finalName = S.links[item.asso]
-          ? await pcUploadToLink(S.links[item.asso], item.name, item.blob)
-          : await pcUpload(item.folder, item.name, item.blob);
+        const finalName = S.links[item.asso] ? await pcUploadToLink(S.links[item.asso], item.name, item.blob)
+          : S.pcloud ? await pcUpload(item.folder, item.name, item.blob)
+          : await dbxUpload(item.asso, item.name, item.blob);
         await queueDel(item.id);
         setHistory(item.id, { status: 'ok', name: finalName });
         sent++;
       } catch (err) {
         failed++;
         console.warn(err);
-        if (err.auth) { toast('Connexion pCloud expirée : reconnectez-vous dans les réglages.'); break; }
+        if (err.auth) { toast('Connexion expirée : reconnectez-vous dans les réglages.'); break; }
       }
     }
   } finally { processing = false; renderHistory(); }
@@ -416,6 +418,7 @@ function showSettings(show) {
     ASSOS.forEach(a => { $('s-link-' + a).value = S.links[a] || ''; $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
     $('s-template').value = S.template;
     $('s-client').value = S.clientId || '';
+    $('s-dbx-key').value = S.dbxKey || DBX_DEFAULT_KEY;
     $('s-monthly').checked = S.monthly;
     renderPcStatus();
   }
@@ -427,8 +430,17 @@ function renderPcStatus() {
   $('pc-status').textContent = on ? `Connecté : ${S.pcloud.email} (${S.pcloud.host.includes('eapi') ? 'serveur Europe' : 'serveur USA'})`
     : links.length ? `Envoi par lien de dépôt pour : ${links.join(', ')}` : 'Non connecté.';
   $('pc-login').hidden = on; $('btn-logout').hidden = !on;
-  $('banner-setup').hidden = on || links.length === ASSOS.length;
+  $('banner-setup').hidden = on || !!S.dropbox || links.length === ASSOS.length;
+  const d = S.dropbox;
+  $('dbx-status').textContent = d ? `Connecté : ${d.email}. Les tickets vont dans Dropbox, dossier Applications › (nom de l'appli) › AECA ou ACAPEL.` : 'Non connecté.';
+  $('dbx-login').hidden = !!d; $('btn-dbx-logout').hidden = !d;
 }
+$('btn-dbx').addEventListener('click', () => {
+  const key = $('s-dbx-key').value.trim();
+  if (!key) { showLoginError('Collez d\'abord la clé d\'appli Dropbox (App key).'); return; }
+  S.dbxKey = key; saveSettings(); dbxConnect(key);
+});
+$('btn-dbx-logout').addEventListener('click', () => { S.dropbox = null; saveSettings(); renderPcStatus(); });
 $('btn-settings').addEventListener('click', () => showSettings($('view-settings').hidden));
 $('link-setup').addEventListener('click', e => { e.preventDefault(); showSettings(true); });
 $('btn-back').addEventListener('click', () => showSettings(false));
@@ -461,7 +473,11 @@ $('btn-login').addEventListener('click', async () => {
 $('btn-logout').addEventListener('click', () => { S.pcloud = null; saveSettings(); renderPcStatus(); });
 $('btn-oauth').addEventListener('click', () => { S.clientId = $('s-client').value.trim(); saveSettings(); pcOAuthStart(); });
 $('btn-key').addEventListener('click', async () => {
-  try { const k = JSON.parse(atob($('pc-key-in').value.trim())); await useToken(k.h, k.t); $('pc-key-in').value = ''; }
+  try {
+    const k = JSON.parse(atob($('pc-key-in').value.trim()));
+    if (k.dbx) await dbxUse(k.dbx, k.r); else await useToken(k.h, k.t);
+    $('pc-key-in').value = '';
+  }
   catch { showLoginError('Clé de connexion invalide : recopiez-la en entier.'); }
 });
 $('btn-copy-key').addEventListener('click', () => { navigator.clipboard.writeText($('pc-key').value).then(() => toast('Clé copiée')); });
@@ -501,3 +517,4 @@ renderPcStatus();
 renderHistory();
 processQueue();
 pcOAuthReturn();
+dbxReturn();

@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tickets Asso">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body data-asso="AECA">
   <header>
@@ -68,6 +68,14 @@
   </main>
 
   <main id="view-settings" hidden>
+    <h2>Dropbox (en attendant pCloud)</h2>
+    <p class="muted" id="dbx-status">Non connecté.</p>
+    <div id="dbx-login">
+      <label>Clé d'appli Dropbox (App key) <input type="text" id="s-dbx-key" autocomplete="off" autocapitalize="off"></label>
+      <button type="button" class="primary" id="btn-dbx">Connecter Dropbox</button>
+    </div>
+    <button type="button" id="btn-dbx-logout" hidden>Déconnecter Dropbox</button>
+
     <h2>Connexion pCloud</h2>
     <p class="muted" id="pc-status">Non connecté.</p>
     <div id="pc-login">
@@ -98,10 +106,11 @@
     </div>
     <button type="button" id="btn-logout" hidden>Déconnecter pCloud</button>
 
-    <h2>Liens de dépôt pCloud (recommandé)</h2>
+    <details><summary>Liens de dépôt pCloud (offres payantes)</summary>
     <p class="muted">Collez le lien de dépôt de chaque dossier (pCloud, clic droit sur le dossier, « Dépôt de fichiers »). Aucune connexion au compte n'est alors nécessaire, et le téléphone peut seulement déposer.</p>
     <label>Lien de dépôt AECA <input type="text" id="s-link-AECA" autocomplete="off" autocapitalize="off" placeholder="https://…pcloud.link/…code=…"></label>
     <label>Lien de dépôt ACAPEL <input type="text" id="s-link-ACAPEL" autocomplete="off" autocapitalize="off" placeholder="https://…pcloud.link/…code=…"></label>
+    </details>
 
     <h2>Dossiers de destination</h2>
     <p class="muted">Utilisés seulement avec la connexion au compte pCloud.</p>
@@ -120,11 +129,12 @@
 
     <button type="button" class="primary" id="btn-save">Enregistrer</button>
     <button type="button" id="btn-back">Retour</button>
-    <p class="muted" id="app-version" style="text-align:center">Version 10</p>
+    <p class="muted" id="app-version" style="text-align:center">Version 11</p>
   </main>
 
   <div id="toast" hidden></div>
-  <script src="ocr.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="dropbox.js?v=11"></script>
+  <script src="ocr.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

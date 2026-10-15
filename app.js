@@ -93,11 +93,30 @@ $('file').addEventListener('change', async e => {
     $('f-shop').value = ''; $('f-amount').value = '';
     $('form').hidden = false; $('scan-label').hidden = true;
     updateFilename();
-    $('f-shop').focus();
+    autoRead(currentBlob);
   } catch (err) { toast('Impossible de lire la photo : ' + err.message); }
   e.target.value = '';
 });
 $('btn-retake').addEventListener('click', () => $('file').click());
+
+// Lecture automatique : préremplit fournisseur, date et montant (champs modifiables ensuite).
+async function autoRead(blob) {
+  const st = $('ocr-status');
+  st.hidden = false; st.textContent = 'Lecture du ticket…';
+  try {
+    const r = await readReceipt(blob, p => { st.textContent = `Lecture du ticket… ${Math.round(p * 100)} %`; });
+    if (blob !== currentBlob) return; // une autre photo a été prise entre-temps
+    const found = [];
+    if (r.shop && !$('f-shop').value) { $('f-shop').value = r.shop; found.push('fournisseur'); }
+    if (r.date) { $('f-date').value = r.date; found.push('date'); }
+    if (r.amount != null && !$('f-amount').value) { $('f-amount').value = r.amount.toFixed(2).replace('.', ','); found.push('montant'); }
+    updateFilename();
+    st.textContent = found.length ? `Lu automatiquement : ${found.join(', ')}. Vérifiez avant d'envoyer.` : 'Lecture impossible, saisissez les informations.';
+  } catch (err) {
+    console.warn(err);
+    st.textContent = 'Lecture automatique indisponible, saisissez les informations.';
+  }
+}
 
 async function compress(file, max = 2000, quality = 0.85) {
   const img = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => loadImg(file));
@@ -348,14 +367,37 @@ function addHistory(entry) { putHistory([entry, ...getHistory()]); renderHistory
 function setHistory(id, patch) { putHistory(getHistory().map(h => h.id === id ? { ...h, ...patch } : h)); }
 async function renderHistory() {
   const h = getHistory();
-  const pending = (await queueAll().catch(() => [])).length;
-  $('queue-info').textContent = pending ? `· ${pending} en attente` : '';
-  $('history').innerHTML = h.length ? h.map(e => `<li>
+  const queue = await queueAll().catch(() => []);
+  const pendingIds = new Set(queue.map(q => q.id));
+  $('queue-info').textContent = queue.length ? `· ${queue.length} en attente` : '';
+  $('history').innerHTML = h.length ? h.map(e => {
+    const waiting = pendingIds.has(e.id);
+    return `<li data-id="${escapeHtml(e.id)}">
       <span class="tag ${e.asso}">${e.asso}</span>
       <span class="name">${escapeHtml(e.name)}</span>
-      <span class="${e.status}">${e.status === 'ok' ? '✓' : '⏳'}</span></li>`).join('')
+      <span class="${waiting ? 'wait' : 'ok'}">${waiting ? '⏳' : '✓'}</span>
+      ${waiting ? '<button type="button" class="mini" data-act="share" aria-label="Partager">⇪</button>' : ''}
+      <button type="button" class="mini" data-act="del" aria-label="Supprimer">✕</button></li>`;
+  }).join('')
     : '<li class="muted">Aucun ticket pour l\'instant.</li>';
 }
+// Supprimer un ticket (en attente : il ne sera jamais envoyé) ou le partager à la main.
+$('history').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const id = btn.closest('li').dataset.id;
+  const item = (await queueAll()).find(q => q.id === id);
+  if (btn.dataset.act === 'share' && item) {
+    const file = new File([item.blob], item.name, { type: 'image/jpeg' });
+    try { await navigator.share({ files: [file] }); } catch (err) { if (err.name !== 'AbortError') toast('Partage impossible'); return; }
+    await queueDel(id); toast('Ticket partagé ✓'); renderHistory(); return;
+  }
+  if (btn.dataset.act === 'del') {
+    if (item && !confirm('Supprimer ce ticket en attente ? Il ne sera pas envoyé.')) return;
+    if (item) await queueDel(id);
+    putHistory(getHistory().filter(x => x.id !== id));
+    renderHistory();
+  }
+});
 
 function remember(shop) {
   if (!shop) return;

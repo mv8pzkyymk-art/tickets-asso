@@ -79,3 +79,5 @@ button:disabled { opacity: .5; }
 details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 #pc-key { display:block; width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; background: var(--bg); color: var(--text); font-size: 13px; }
+button.mini { width: auto; margin: 0; padding: 4px 10px; font-size: 15px; border-radius: 8px; }
+#ocr-status { margin: 4px 0 0; }

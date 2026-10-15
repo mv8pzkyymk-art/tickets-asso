@@ -205,34 +205,40 @@ async function pcPost(host, method, params) {
 
 async function pcLogin(email, password, tfaCode) {
   const errors = [];
+  // Résumé lisible d'une réponse pCloud (sans jeton), pour comprendre un refus.
+  const brief = j => `${j.error || 'refus'} (code ${j.result}; champs : ${Object.keys(j).filter(k => !['auth', 'token'].includes(k)).join(', ')}${j.token ? ', token' : ''})`;
   for (const host of HOSTS) {
     const label = host.includes('eapi') ? 'Europe' : 'USA';
     try {
-      const params = { getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 };
-      if (tfaCode) params.code = tfaCode;
-      const j = await pcPost(host, 'userinfo', params);
+      const base = { getauth: 1, logout: 1, username: email, password, authexpire: 31536000 * 5 };
+      // 1) Connexion simple, sans code.
+      const j = await pcPost(host, 'userinfo', base);
       if (j.result === 0 && j.auth) return { host, auth: j.auth, email: j.email || email };
-      if (j.result === 1022) {
-        // pCloud demande un code de sécurité (envoyé par e-mail, SMS ou appli d'authentification).
-        const e = new Error(tfaCode ? 'Code refusé par pCloud, vérifiez-le puis réessayez.'
-          : 'pCloud demande un code de sécurité : saisissez le code reçu puis touchez à nouveau « Se connecter ».');
-        e.tfa = true; throw e;
+      const needsCode = j.result === 1022 || j.result === 2297 || !!j.token;
+      if (!needsCode) { errors.push(`${label} : ${brief(j)}`); continue; }
+      if (!tfaCode) {
+        const err = new Error('pCloud demande un code de sécurité : saisissez le code à 6 chiffres puis touchez à nouveau « Se connecter ».');
+        err.tfa = true; throw err;
       }
-      if (j.result === 2297 && j.token) {
-        // Double authentification activée sur le compte.
-        if (!tfaCode) { const e = new Error('Code de double authentification requis : saisissez le code reçu puis touchez à nouveau « Se connecter ».'); e.tfa = true; throw e; }
+      // 2) Double authentification : pCloud renvoie un jeton temporaire à échanger avec le code.
+      if (j.token) {
         const t = await pcPost(host, 'tfa_login', { token: j.token, code: tfaCode, trustdevice: 1 });
         if (t.result === 0 && t.auth) return { host, auth: t.auth, email };
-        errors.push(`${label} : code refusé (${t.error || ''} ${t.result})`);
+        errors.push(`${label} étape code : ${brief(t)}`);
         continue;
       }
-      errors.push(`${label} : ${j.error || 'refus'} (code ${j.result})`);
-    } catch (e) {
-      if (e.tfa) throw e;
-      errors.push(`${label} : connexion impossible (${e.message})`);
+      // 3) Sinon, on renvoie la connexion avec le code joint.
+      const k = await pcPost(host, 'userinfo', { ...base, code: tfaCode });
+      if (k.result === 0 && k.auth) return { host, auth: k.auth, email: k.email || email };
+      errors.push(`${label} : ${brief(j)} puis avec code : ${brief(k)}`);
+    } catch (err) {
+      if (err.tfa) { err.tfa = true; throw err; }
+      errors.push(`${label} : connexion impossible (${err.message})`);
     }
   }
-  throw new Error(errors.join(' | '));
+  const err = new Error(errors.join(' | '));
+  if (tfaCode) err.tfa = true;
+  throw err;
 }
 
 // Jeton à joindre aux appels : connexion pCloud officielle (access_token) ou e-mail/mot de passe (auth).

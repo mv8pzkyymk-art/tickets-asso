@@ -19,7 +19,7 @@ function loadSettings() {
 }
 function saveSettings() { localStorage.setItem('settings', JSON.stringify(S)); }
 // Clé de l'appli Dropbox des associations (publique, ce n'est pas un secret).
-const DBX_DEFAULT_KEY = '';
+const DBX_DEFAULT_KEY = '14hjx87jux5s50y';
 let S = loadSettings();
 if (!S.links) S.links = { AECA: '', ACAPEL: '' };
 const canSend = asso => !!(S.links[asso] || S.pcloud || S.dropbox);

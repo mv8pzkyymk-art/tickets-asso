@@ -130,6 +130,26 @@ const queueAdd = item => queueOp('readwrite', s => s.put(item));
 const queueDel = id => queueOp('readwrite', s => s.delete(id));
 const queueAll = () => queueOp('readonly', s => s.getAll());
 
+// Enregistrement manuel via le menu de partage du téléphone (pCloud, Fichiers, e-mail…),
+// avec le fichier déjà nommé. Fonctionne sans aucune connexion à pCloud dans l'appli.
+$('btn-share').addEventListener('click', async () => {
+  if (!currentBlob) return;
+  const name = buildName();
+  const file = new File([currentBlob], name, { type: 'image/jpeg' });
+  if (!(navigator.canShare && navigator.canShare({ files: [file] }))) {
+    // Navigateur sans partage de fichiers : on télécharge le fichier nommé.
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click();
+  } else {
+    try { await navigator.share({ files: [file] }); }
+    catch (err) { if (err.name === 'AbortError') return; toast('Partage impossible : ' + err.message); return; }
+  }
+  remember($('f-shop').value.trim());
+  addHistory({ id: Date.now() + '-s', asso: S.asso, name, folder: '', status: 'ok' });
+  currentBlob = null;
+  $('form').hidden = true; $('scan-label').hidden = false;
+  toast('Ticket partagé ✓');
+});
+
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
   if (!currentBlob) return;

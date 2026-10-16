@@ -137,10 +137,16 @@ async function loadPhoto(file, max = 2600) {
   return c;
 }
 // Ticket recadré, redressé et éclairci, en JPEG.
-function renderScan(quality = 0.85) {
+function renderScan(quality = 0.8) {
   let c;
   if (srcQuad) c = warp(srcCanvas, srcQuad);
   else { c = document.createElement('canvas'); c.width = srcCanvas.width; c.height = srcCanvas.height; c.getContext('2d').drawImage(srcCanvas, 0, 0); }
+  // 2000 px sur le grand côté suffisent pour un ticket net, et le fichier part plus vite.
+  const k = 2000 / Math.max(c.width, c.height);
+  if (k < 1) {
+    const r = document.createElement('canvas'); r.width = Math.round(c.width * k); r.height = Math.round(c.height * k);
+    r.getContext('2d').drawImage(c, 0, 0, r.width, r.height); c = r;
+  }
   enhance(c);
   return new Promise((ok, ko) => c.toBlob(b => b ? ok(b) : ko(new Error('compression')), 'image/jpeg', quality));
 }

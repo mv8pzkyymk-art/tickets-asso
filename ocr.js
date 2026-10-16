@@ -8,7 +8,7 @@ const ENSEIGNES = [
   'Aldi', 'Netto', 'Leader Price', 'Grand Frais', 'Picard', 'Biocoop', 'Naturalia', 'Metro', 'Promocash',
   'Leroy Merlin', 'Castorama', 'Brico Dépôt', 'Bricomarché', 'Mr Bricolage', 'Ikea', 'Decathlon', 'Fnac', 'Darty',
   'Boulanger', 'Cultura', 'Action', 'Gifi', 'La Foir\'Fouille', 'Bureau Vallée', 'Office Depot', 'Cora',
-  'Amazon', 'Total', 'TotalEnergies', 'Esso', 'Shell', 'BP', 'La Poste',
+  'Amazon', 'TotalEnergies', 'Esso', 'Shell', 'BP', 'La Poste',
   'Truffaut', 'Jardiland', 'Botanic', 'Maxi Zoo', 'Norauto', 'Feu Vert', 'Speedy', 'Point S', 'Sephora', 'Nocibé',
 ];
 
@@ -75,15 +75,18 @@ function findDate(text) {
 function findShop(lines) {
   const head = lines.slice(0, 12).map(norm).join(' ');
   for (const e of ENSEIGNES) {
-    const n = norm(e).replace(/[.']/g, '.?');
+    // Les mots d'une enseigne peuvent être séparés par un saut de ligne ou des signes parasites (logo).
+    const n = norm(e).replace(/[.']/g, '.?').split(' ').join('[^a-z0-9]{0,4}(?:[a-z]{1,6}[^a-z0-9]{1,4}){0,3}');
     if (new RegExp('\\b' + n + '\\b').test(head)) return e === 'E.Leclerc' ? 'Leclerc' : e;
   }
+  if (/\bbrico\b/.test(head)) return 'Brico Dépôt';
   for (const line of lines.slice(0, 6)) {
     const t = line.replace(/[^A-Za-zÀ-ÿ'& -]/g, ' ').replace(/\s+/g, ' ').trim();
     const letters = t.replace(/[^A-Za-zÀ-ÿ]/g, '');
-    if (letters.length >= 4 && letters.length / t.length > 0.6 && !/ticket|bienvenue|facture|caisse|magasin|\btel\b|siret|www|\brue\b|\bav\b|avenue|boulevard/i.test(t)) {
+    if (letters.length >= 4 && letters.length / t.length > 0.6 && /[A-Za-zÀ-ÿ]{4,}/.test(t) && !/ticket|bienvenue|facture|caisse|magasin|\btel\b|siret|www|\brue\b|\bav\b|avenue|boulevard/i.test(t)) {
       const t2 = t.replace(/^(?:(?:\S{1,2}|mag|magasin|ste|sarl|sas)\s+)+/i, '') || t; // « A.S.F Mag Copifac » → « Copifac »
-      return t2.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, c => c.toUpperCase()).slice(0, 30);
+      const t3 = t2.replace(/(?:\s+\S{1,2})+$/, '') || t2; // bouts de lettres parasites en fin de ligne
+      return t3.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, c => c.toUpperCase()).slice(0, 30);
     }
   }
   return null;
@@ -136,7 +139,7 @@ async function readReceipt(blob, onProgress) {
   if (r.shop && !ENSEIGNES.includes(r.shop) && r.shop !== 'Leclerc') {
     const words = norm(r.shop).split(/\s+/);
     const line = (data.lines || []).find(l => words.every(w => norm(l.text).includes(w)));
-    if (line && line.confidence < 35) r.shop = null;
+    if (line && line.confidence < 25) r.shop = null;
   }
   return { ...r, text: data.text };
 }

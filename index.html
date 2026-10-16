@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Tickets Asso">
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body data-asso="AECA">
   <header>
@@ -33,7 +33,8 @@
 
     <form id="form" hidden>
       <img id="preview" alt="Aperçu du ticket">
-      <button type="button" id="btn-retake" class="link">Reprendre la photo</button>
+      <div class="row-links"><button type="button" id="btn-crop" class="link">Ajuster le cadrage</button>
+      <button type="button" id="btn-retake" class="link">Reprendre la photo</button></div>
       <p class="muted" id="ocr-status" hidden></p>
       <details id="ocr-raw" hidden><summary>Voir le texte lu</summary><pre id="ocr-text"></pre></details>
 
@@ -74,7 +75,13 @@
     <div id="dbx-login">
       <label>Clé d'appli Dropbox (App key) <input type="text" id="s-dbx-key" autocomplete="off" autocapitalize="off"></label>
       <button type="button" class="primary" id="btn-dbx">Connecter Dropbox</button>
+      <details>
+        <summary>J'ai reçu une clé d'un autre téléphone</summary>
+        <label>Clé reçue <input type="text" id="dbx-key-in" autocomplete="off" autocapitalize="off"></label>
+        <button type="button" id="btn-dbx-key">Utiliser cette clé</button>
+      </details>
     </div>
+    <button type="button" id="btn-dbx-share" hidden>Copier la clé pour un autre téléphone</button>
     <button type="button" id="btn-dbx-logout" hidden>Déconnecter Dropbox</button>
 
     <h2>Connexion pCloud</h2>
@@ -119,9 +126,8 @@
     <label>Dossier ACAPEL <input type="text" id="s-folder-ACAPEL"></label>
     <label class="check"><input type="checkbox" id="s-monthly"> Ranger dans un sous-dossier par mois (ex. 2026-10)</label>
 
-    <h2>Règle de nommage</h2>
-    <label>Modèle <input type="text" id="s-template"></label>
-    <p class="muted">Variables : {date} (AAAAMMJJ) {date_iso} (AAAA-MM-JJ) {annee} {mois} {jour} {asso} {commerce} {montant} {carte}</p>
+    <h2>Nom des fichiers</h2>
+    <p class="muted">Identique sur tous les téléphones : AAAAMMJJ-fournisseur-montant-ASSO (ex. 20261014-Leclerc Drive-42,50-ACAPEL.pdf).</p>
 
     <h2>Cartes bancaires (facultatif)</h2>
     <label>Cartes AECA <input type="text" id="s-cards-AECA" placeholder="ex. CB1, CB2"></label>
@@ -130,13 +136,23 @@
 
     <button type="button" class="primary" id="btn-save">Enregistrer</button>
     <button type="button" id="btn-back">Retour</button>
-    <p class="muted" id="app-version" style="text-align:center">Version 15</p>
+    <p class="muted" id="app-version" style="text-align:center">Version 16</p>
   </main>
 
+  <div id="crop-view" hidden>
+    <p>Placez les 4 points sur les coins du ticket.</p>
+    <div class="crop-wrap"><div class="crop-inner"><img id="crop-img" alt=""><svg id="crop-svg"></svg></div></div>
+    <div class="crop-actions">
+      <button type="button" id="crop-cancel">Annuler</button>
+      <button type="button" id="crop-full">Photo entière</button>
+      <button type="button" class="primary" id="crop-ok">Valider</button>
+    </div>
+  </div>
   <div id="toast" hidden></div>
-  <script src="dropbox.js?v=15"></script>
-  <script src="pdf.js?v=15"></script>
-  <script src="ocr.js?v=15"></script>
-  <script src="app.js?v=15"></script>
+  <script src="dropbox.js?v=16"></script>
+  <script src="scan.js?v=16"></script>
+  <script src="pdf.js?v=16"></script>
+  <script src="ocr.js?v=16"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

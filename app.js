@@ -64,7 +64,8 @@ function buildName() {
     montant: formatAmount($('f-amount').value) || '0,00',
     carte: clean($('f-card').value || ''),
   };
-  let name = S.template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  // Format identique sur tous les téléphones : il n'est pas réglable.
+  let name = DEFAULTS.template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   name = name.replace(/([-_])\1+/g, '$1').replace(/^[-_]|[-_]$/g, '');
   return name + '.pdf';
 }
@@ -89,13 +90,16 @@ $('file').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    currentBlob = await compress(file);
+    srcCanvas = await loadPhoto(file);
+    srcQuad = null;
+    try { srcQuad = findDocument(srcCanvas); } catch (err) { console.warn(err); }
+    currentBlob = await renderScan();
     $('preview').src = URL.createObjectURL(currentBlob);
     $('f-date').value = today();
     $('f-shop').value = ''; $('f-amount').value = '';
     $('form').hidden = false; $('scan-label').hidden = true;
     updateFilename();
-    autoRead(currentBlob, file); // lecture sur la photo d'origine, plus détaillée
+    autoRead(currentBlob);
   } catch (err) { toast('Impossible de lire la photo : ' + err.message); }
   e.target.value = '';
 });
@@ -122,14 +126,61 @@ async function autoRead(blob, original) {
   }
 }
 
-async function compress(file, max = 2000, quality = 0.85) {
+// Photo d'origine (réduite à 2600 px) et coins du ticket repérés dedans.
+let srcCanvas = null, srcQuad = null;
+async function loadPhoto(file, max = 2600) {
   const img = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => loadImg(file));
   const scale = Math.min(1, max / Math.max(img.width, img.height));
   const c = document.createElement('canvas');
   c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+// Ticket recadré, redressé et éclairci, en JPEG.
+function renderScan(quality = 0.85) {
+  let c;
+  if (srcQuad) c = warp(srcCanvas, srcQuad);
+  else { c = document.createElement('canvas'); c.width = srcCanvas.width; c.height = srcCanvas.height; c.getContext('2d').drawImage(srcCanvas, 0, 0); }
+  enhance(c);
   return new Promise((ok, ko) => c.toBlob(b => b ? ok(b) : ko(new Error('compression')), 'image/jpeg', quality));
 }
+
+// Ajustement manuel du cadrage : 4 poignées à faire glisser sur la photo d'origine.
+$('btn-crop').addEventListener('click', () => {
+  if (!srcCanvas) return;
+  const W = srcCanvas.width, H = srcCanvas.height;
+  let q = (srcQuad || [[0, 0], [W, 0], [W, H], [0, H]]).map(p => p.slice());
+  const box = $('crop-view'), img = $('crop-img'), svg = $('crop-svg');
+  img.src = srcCanvas.toDataURL('image/jpeg', 0.8);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const r = Math.max(W, H) * 0.03;
+  svg.innerHTML = `<polygon fill="rgba(46,125,50,.15)" stroke="#2e7d32" stroke-width="${r / 4}"/>` +
+    q.map((_, i) => `<circle data-i="${i}" r="${r}" fill="rgba(46,125,50,.6)" stroke="#fff" stroke-width="${r / 5}"/>`).join('');
+  const draw = () => {
+    svg.querySelector('polygon').setAttribute('points', q.map(p => p.join(',')).join(' '));
+    svg.querySelectorAll('circle').forEach(c => { c.setAttribute('cx', q[c.dataset.i][0]); c.setAttribute('cy', q[c.dataset.i][1]); });
+  };
+  draw();
+  let drag = null;
+  svg.onpointerdown = e => { const c = e.target.closest('circle'); if (c) { drag = +c.dataset.i; svg.setPointerCapture(e.pointerId); e.preventDefault(); } };
+  svg.onpointermove = e => {
+    if (drag == null) return;
+    const b = svg.getBoundingClientRect();
+    q[drag] = [Math.max(0, Math.min(W, (e.clientX - b.left) / b.width * W)), Math.max(0, Math.min(H, (e.clientY - b.top) / b.height * H))];
+    draw();
+  };
+  svg.onpointerup = () => { drag = null; };
+  $('crop-full').onclick = () => { q = [[0, 0], [W, 0], [W, H], [0, H]]; draw(); };
+  $('crop-cancel').onclick = () => { box.hidden = true; };
+  $('crop-ok').onclick = async () => {
+    srcQuad = convex(q) ? q : null;
+    box.hidden = true;
+    currentBlob = await renderScan();
+    $('preview').src = URL.createObjectURL(currentBlob);
+    autoRead(currentBlob);
+  };
+  box.hidden = false;
+});
 function loadImg(file) {
   return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(file); });
 }
@@ -418,7 +469,6 @@ function showSettings(show) {
   $('view-main').hidden = show; $('view-settings').hidden = !show;
   if (show) {
     ASSOS.forEach(a => { $('s-link-' + a).value = S.links[a] || ''; $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
-    $('s-template').value = S.template;
     $('s-client').value = S.clientId || '';
     $('s-dbx-key').value = S.dbxKey || DBX_DEFAULT_KEY;
     $('s-monthly').checked = S.monthly;
@@ -435,8 +485,25 @@ function renderPcStatus() {
   $('banner-setup').hidden = on || !!S.dropbox || links.length === ASSOS.length;
   const d = S.dropbox;
   $('dbx-status').textContent = d ? `Connecté : ${d.email}. Les tickets vont dans Dropbox, dossier Applications › (nom de l'appli) › AECA ou ACAPEL.` : 'Non connecté.';
-  $('dbx-login').hidden = !!d; $('btn-dbx-logout').hidden = !d;
+  $('dbx-login').hidden = !!d; $('btn-dbx-logout').hidden = !d; $('btn-dbx-share').hidden = !d;
 }
+// Connecter un autre téléphone sans lui donner le mot de passe Dropbox.
+$('btn-dbx-share').addEventListener('click', async () => {
+  const key = btoa(JSON.stringify({ dbx: S.dropbox.appKey, r: S.dropbox.refresh }));
+  const text = `Clé de connexion Tickets Asso (à coller dans Réglages › Dropbox › « J'ai reçu une clé ») :\n${key}`;
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(key); toast('Clé copiée'); }
+  } catch (e) { if (e.name !== 'AbortError') { await navigator.clipboard.writeText(key).catch(() => {}); toast('Clé copiée'); } }
+});
+$('btn-dbx-key').addEventListener('click', async () => {
+  try {
+    const raw = $('dbx-key-in').value.trim().split(/\s+/).pop();
+    const k = JSON.parse(atob(raw));
+    if (!k.dbx || !k.r) throw new Error();
+    await dbxUse(k.dbx, k.r); $('dbx-key-in').value = '';
+  } catch { showLoginError('Clé invalide : recopiez-la en entier.'); }
+});
 $('btn-dbx').addEventListener('click', () => {
   const key = $('s-dbx-key').value.trim();
   if (!key) { showLoginError('Collez d\'abord la clé d\'appli Dropbox (App key).'); return; }
@@ -452,7 +519,6 @@ $('btn-save').addEventListener('click', () => {
     S.cards[a] = $('s-cards-' + a).value.split(',').map(s => s.trim()).filter(Boolean);
     S.links[a] = linkCode($('s-link-' + a).value);
   });
-  S.template = $('s-template').value.trim() || DEFAULTS.template;
   S.monthly = $('s-monthly').checked;
   saveSettings(); fillCards(); updateFilename();
   toast('Réglages enregistrés'); showSettings(false);

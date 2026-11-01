@@ -1,7 +1,7 @@
 // Met en cache l'interface pour qu'elle s'ouvre même sans réseau.
 // Les appels à l'API pCloud ne passent jamais par le cache.
-const CACHE = 'tickets-v17';
-const SHELL = ['./', 'index.html', 'style.css?v=17', 'app.js?v=17', 'ocr.js?v=17', 'dropbox.js?v=17', 'pdf.js?v=17', 'scan.js?v=17', 'ocr/tesseract.min.js', 'ocr/worker.min.js', 'ocr/lang/fra.traineddata.gz', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png'];
+const CACHE = 'tickets-v18';
+const SHELL = ['./', 'index.html', 'style.css?v=18', 'app.js?v=18', 'ocr.js?v=18', 'dropbox.js?v=18', 'pdf.js?v=18', 'scan.js?v=18', 'ocr/tesseract.min.js', 'ocr/worker.min.js', 'ocr/lang/fra.traineddata.gz', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

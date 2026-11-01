@@ -9,7 +9,7 @@ const DEFAULTS = {
   cards: { AECA: [], ACAPEL: [] },
   pcloud: null, // { host, auth | token, email }
   links: { AECA: '', ACAPEL: '' }, // liens de dépôt pCloud (code), un par association
-  clientId: '', // identifiant de l'appli déclarée chez pCloud (connexion « Se connecter avec pCloud »)
+  clientId: 'nrKLBszGTp8', // identifiant de l'appli déclarée chez pCloud (connexion « Se connecter avec pCloud »)
 };
 const ASSOS = ['AECA', 'ACAPEL'];
 
@@ -348,7 +348,7 @@ function pcCred() { return S.pcloud.token ? { access_token: S.pcloud.token } : {
 // La page de connexion de pCloud gère elle-même la connexion Apple et les codes de sécurité.
 function redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
 function pcOAuthStart() {
-  const id = (S.clientId || '').trim();
+  const id = (S.clientId || DEFAULTS.clientId).trim();
   if (!id) { showLoginError('Renseignez d\'abord l\'identifiant d\'appli pCloud ci-dessous.'); return; }
   location.href = 'https://my.pcloud.com/oauth2/authorize?' + new URLSearchParams({ client_id: id, response_type: 'token', redirect_uri: redirectUri() });
 }
@@ -475,7 +475,7 @@ function showSettings(show) {
   $('view-main').hidden = show; $('view-settings').hidden = !show;
   if (show) {
     ASSOS.forEach(a => { $('s-link-' + a).value = S.links[a] || ''; $('s-folder-' + a).value = S.folders[a]; $('s-cards-' + a).value = (S.cards[a] || []).join(', '); });
-    $('s-client').value = S.clientId || '';
+    $('s-client').value = S.clientId || DEFAULTS.clientId;
     $('s-dbx-key').value = S.dbxKey || DBX_DEFAULT_KEY;
     $('s-monthly').checked = S.monthly;
     renderPcStatus();
@@ -487,27 +487,36 @@ function renderPcStatus() {
   const links = ASSOS.filter(a => S.links[a]);
   $('pc-status').textContent = on ? `Connecté : ${S.pcloud.email} (${S.pcloud.host.includes('eapi') ? 'serveur Europe' : 'serveur USA'})`
     : links.length ? `Envoi par lien de dépôt pour : ${links.join(', ')}` : 'Non connecté.';
-  $('pc-login').hidden = on; $('btn-logout').hidden = !on;
+  $('pc-login').hidden = on; $('btn-logout').hidden = !on; $('btn-pc-share').hidden = !(on && S.pcloud.token);
   $('banner-setup').hidden = on || !!S.dropbox || links.length === ASSOS.length;
   const d = S.dropbox;
   $('dbx-status').textContent = d ? `Connecté : ${d.email}. Les tickets vont dans Dropbox, dossier Applications › (nom de l'appli) › AECA ou ACAPEL.` : 'Non connecté.';
   $('dbx-login').hidden = !!d; $('btn-dbx-logout').hidden = !d; $('btn-dbx-share').hidden = !d;
 }
 // Connecter un autre téléphone sans lui donner le mot de passe Dropbox.
-$('btn-dbx-share').addEventListener('click', async () => {
-  const key = btoa(JSON.stringify({ dbx: S.dropbox.appKey, r: S.dropbox.refresh }));
+// La clé contient les connexions de ce téléphone (pCloud et/ou Dropbox).
+async function shareKey() {
+  const k = {};
+  if (S.pcloud && S.pcloud.token) { k.h = S.pcloud.host; k.t = S.pcloud.token; }
+  if (S.dropbox) { k.dbx = S.dropbox.appKey; k.r = S.dropbox.refresh; }
+  const key = btoa(JSON.stringify(k));
   const text = `Clé de connexion Tickets Asso (à coller dans Réglages › Dropbox › « J'ai reçu une clé ») :\n${key}`;
   try {
     if (navigator.share) await navigator.share({ text });
     else { await navigator.clipboard.writeText(key); toast('Clé copiée'); }
   } catch (e) { if (e.name !== 'AbortError') { await navigator.clipboard.writeText(key).catch(() => {}); toast('Clé copiée'); } }
-});
+}
+$('btn-dbx-share').addEventListener('click', shareKey);
+$('btn-pc-share').addEventListener('click', shareKey);
+async function useKey(raw) {
+  const k = JSON.parse(atob(raw.trim().split(/\s+/).pop()));
+  if (!k.h && !k.dbx) throw new Error();
+  if (k.h) await useToken(k.h, k.t);
+  if (k.dbx) await dbxUse(k.dbx, k.r);
+}
 $('btn-dbx-key').addEventListener('click', async () => {
   try {
-    const raw = $('dbx-key-in').value.trim().split(/\s+/).pop();
-    const k = JSON.parse(atob(raw));
-    if (!k.dbx || !k.r) throw new Error();
-    await dbxUse(k.dbx, k.r); $('dbx-key-in').value = '';
+    await useKey($('dbx-key-in').value); $('dbx-key-in').value = '';
   } catch { showLoginError('Clé invalide : recopiez-la en entier.'); }
 });
 $('btn-dbx').addEventListener('click', () => {
@@ -548,9 +557,7 @@ $('btn-logout').addEventListener('click', () => { S.pcloud = null; saveSettings(
 $('btn-oauth').addEventListener('click', () => { S.clientId = $('s-client').value.trim(); saveSettings(); pcOAuthStart(); });
 $('btn-key').addEventListener('click', async () => {
   try {
-    const k = JSON.parse(atob($('pc-key-in').value.trim()));
-    if (k.dbx) await dbxUse(k.dbx, k.r); else await useToken(k.h, k.t);
-    $('pc-key-in').value = '';
+    await useKey($('pc-key-in').value); $('pc-key-in').value = '';
   }
   catch { showLoginError('Clé de connexion invalide : recopiez-la en entier.'); }
 });
